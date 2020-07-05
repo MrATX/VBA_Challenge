@@ -1,0 +1,189 @@
+Option Explicit
+
+Sub yearend_analyses()
+
+Dim answer As String
+
+answer = MsgBox("This process will take several minutes. Continue?", vbYesNo, "Year-end Analysis")
+
+If answer = vbNo Then Exit Sub
+
+'Define Variables
+Dim i As Long
+Dim j As Long
+Dim k As Long
+Dim l As Long
+Dim ticker As String
+Dim year_open As Double
+Dim year_close As Double
+Dim lastrow As Long
+Dim lastticker As Long
+Dim max_inc As Range
+Dim max_dec As Range
+Dim max_stock As Range
+Dim ticker_field As Range
+Dim vol_field As Range
+Dim Ubound_range As Range
+Dim Lbound_range As Range
+Dim Ubound_WIP As Long
+Dim Lbound_WIP As Long
+Dim bookmark As Range
+
+
+
+For k = 1 To ActiveWorkbook.Sheets.Count
+    Worksheets(k).Activate
+    'Setup table/row headers
+    Range("I1").Formula = "Ticker"
+    Range("J1").Formula = "Yearly Change"
+    Range("K1").Formula = "Percent Change"
+    Range("L1").Formula = "Total Stock Volume"
+    Range("P1").Formula = "Ticker"
+    Range("Q1").Formula = "Value"
+    Range("O2").Formula = "Greatest % Increase"
+    Range("O3").Formula = "Greatest % Decrease"
+    Range("O4").Formula = "Greatest Total Volume"
+    
+    'Grab ticker list
+    Range("A2").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Set ticker_field = Selection
+    Selection.Copy
+    Range("I2").PasteSpecial
+    Selection.RemoveDuplicates Columns:=1
+    
+    'Grab vol range
+    Range("G2").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Set vol_field = Selection
+    
+    'Define boundaries
+    lastrow = Cells(Rows.Count, 1).End(xlUp).Row
+    lastticker = Cells(Rows.Count, 9).End(xlUp).Row
+    
+    'Format
+    Columns("A:Q").Select
+    With Selection
+        Cells.HorizontalAlignment = xlCenter
+    End With
+    
+    'Loop through data, establish boundaries per ticker, _
+    define min & max dates, pull appropriate values, _
+    with print functions to track variables
+    Set bookmark = Range("A2")
+    For i = 2 To lastticker
+        ticker = Range(Cells(i, 9).Address()).Formula
+        Debug.Print ticker
+        For j = bookmark.Row To lastrow
+            year_close = 0
+            If Range(Cells(j, 1).Address()).Formula = ticker And _
+            Range(Cells(j - 1, 1).Address()).Formula <> ticker Then
+                year_open = Range(Cells(j, 3).Address()).Value
+            End If
+            If Range(Cells(j, 1).Address()).Formula = ticker And _
+            Range(Cells(j + 1, 1).Address()).Formula <> ticker Then
+                year_close = Range(Cells(j, 6).Address()).Value
+            End If
+            If year_close <> 0 Then _
+                Set bookmark = Range(Cells(j + 1, 1).Address()): Exit For
+        Next j
+        
+        'Calculated fields for new table
+        Debug.Print year_open
+        Debug.Print year_close
+        Range(Cells(i, 10).Address()).Value = year_close - year_open
+        If year_open = 0 Then
+        Range(Cells(i, 11).Address()).Value = 1
+        Else: Range(Cells(i, 11).Address()).Value = ((year_close - year_open) / year_open)
+        End If
+        Range(Cells(i, 12).Address()).FormulaR1C1 = _
+            "=SUMIF(" & ticker_field.Address(ReferenceStyle:=xlR1C1) _
+            & ",""=""&RC[-3]," & vol_field.Address(ReferenceStyle:=xlR1C1) & ")"
+    Next i
+
+    'Formatting
+    Range(Cells(2, 11).Address(), Cells(lastticker, 11).Address()).Select
+    Selection.Style = "Percent"
+    Selection.NumberFormat = "0.00%"
+    
+    Range(Cells(2, 10).Address(), Cells(lastticker, 10).Address()).Select
+    Selection.NumberFormat = "0.00"
+    Selection.FormatConditions.Add Type:=xlCellValue, Operator:=xlGreater, _
+        Formula1:="=0"
+    Selection.FormatConditions(Selection.FormatConditions.Count).SetFirstPriority
+    With Selection.FormatConditions(1).Font
+        .Color = -16752384
+        .TintAndShade = 0
+    End With
+    With Selection.FormatConditions(1).Interior
+        .PatternColorIndex = xlAutomatic
+        .Color = 13561798
+        .TintAndShade = 0
+    End With
+    Selection.FormatConditions(1).StopIfTrue = False
+    Selection.FormatConditions.Add Type:=xlCellValue, Operator:=xlLess, _
+        Formula1:="=0"
+    Selection.FormatConditions(Selection.FormatConditions.Count).SetFirstPriority
+    With Selection.FormatConditions(1).Font
+        .Color = -16383844
+        .TintAndShade = 0
+    End With
+    With Selection.FormatConditions(1).Interior
+        .PatternColorIndex = xlAutomatic
+        .Color = 13551615
+        .TintAndShade = 0
+    End With
+    Selection.FormatConditions(1).StopIfTrue = False
+    
+    'Calculate bonus variables by establishing ranges _
+    and using min/max functions
+    Set max_inc = Range("K2")
+    Set max_dec = Range("K2")
+    Set max_stock = Range("L2")
+
+    For l = 2 To lastticker
+        Range(Cells(l, 11).Address()).Select
+        If Selection.Value > max_inc.Value Then _
+            Set max_inc = Selection
+        If Selection.Value < max_dec.Value Then _
+            Set max_dec = Selection
+        Range(Cells(l, 12).Address()).Select
+        If Selection.Value > max_stock.Value Then _
+            Set max_stock = Selection
+    Next l
+
+    Range("P2") = max_inc.Offset(, -2)
+    Range("Q2") = max_inc
+    Range("P3") = max_dec.Offset(, -2)
+    Range("Q3") = max_dec
+    Range("P4") = max_stock.Offset(, -3)
+    Range("Q4") = max_stock
+    
+    'Formatting
+    Range("Q2:Q3").Select
+    Selection.Style = "Percent"
+    Selection.NumberFormat = "0.00%"
+    Range("G2").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Selection.NumberFormat = "_(* #,##0_);_(* (#,##0);_(* ""-""??_);_(@_)"
+    Range("L2").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Selection.NumberFormat = "_(* #,##0_);_(* (#,##0);_(* ""-""??_);_(@_)"
+    Range("Q4").Select
+    Selection.NumberFormat = "_(* #,##0_);_(* (#,##0);_(* ""-""??_);_(@_)"
+    Columns("G:Q").EntireColumn.AutoFit
+    Range("L2").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Selection.Copy
+    Selection.PasteSpecial Paste:=xlPasteValues
+    Application.CutCopyMode = False
+    Range("A1").Select
+    
+Next k
+    
+    'Soft reset
+    Worksheets(1).Activate
+    MsgBox "Year-end Analysis complete."
+
+End Sub
+
