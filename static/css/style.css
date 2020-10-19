@@ -4,7 +4,7 @@
   }
 
   div{
-    border:none;
+    border:none;  
   }
   
   .page-header{
@@ -44,4 +44,8 @@
   #analysispara{
     margin:25px;
     font-size: x-large;
+  }
+
+  .jumbotron{
+    background-color:white;
   }
